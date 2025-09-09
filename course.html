@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YuvaPath Dashboard with Quiz Sidebar</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html { scroll-behavior: smooth; }
+  #course-section { display: none; }
+  .course-item:hover { background-color: #f1f5f9; cursor: pointer; }
+  .chat-message {
+    max-width: 75%;
+    padding: 8px 12px;
+    border-radius: 16px;
+    margin-bottom: 8px;
+  }
+  .chat-user {
+    background-color: #DCF8C6;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+  .chat-bot {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  #quiz-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 380px;
+    height: 100vh;
+    background: white;
+    border-left: 1px solid #ddd;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+    padding: 1rem;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 100;
+  }
+  #quiz-sidebar.open {
+    transform: translateX(0);
+  }
+  #quiz-toggle-btn {
+    position: fixed;
+    top: 50%;
+    right: 380px;
+    background: #2563eb;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-top-left-radius: 0.5rem;
+    border-bottom-left-radius: 0.5rem;
+    cursor: pointer;
+    z-index: 101;
+    user-select: none;
+    transform: translateY(-50%);
+  }
+  .quiz-card {
+    border: 1px solid #ddd;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: #f9fafb;
+  }
+  .quiz-question {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .quiz-options label {
+    display: block;
+    margin-bottom: 0.25rem;
+    cursor: pointer;
+  }
+  .quiz-submit-btn {
+    background-color: #10b981;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .quiz-result {
+    margin-top: 0.75rem;
+    font-weight: 700;
+    color: #2563eb;
+  }
+</style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+<!-- Navbar -->
+<nav class="bg-blue-600 text-white p-4 shadow-md">
+  <div class="container mx-auto flex justify-between items-center">
+    <h1 class="text-xl font-bold">YuvaPath Dashboard</h1>
+    <span id="user-email" class="italic"></span>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<main class="container mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+
+  <!-- Left Sidebar: Course List -->
+  <div class="bg-white rounded shadow p-4 flex flex-col">
+    <input
+      type="text"
+      id="search-course"
+      placeholder="Search courses..."
+      class="border rounded p-2 mb-3"
+    />
+    <div
+      id="course-list"
+      class="overflow-y-auto flex-1 border rounded p-2 space-y-2"
+      style="max-height: 70vh;"
+    ></div>
+  </div>
+
+  <!-- Right Content: Course Details + Chat -->
+  <div class="md:col-span-2 bg-white rounded shadow p-6 flex flex-col">
+    <!-- Course Details -->
+    <section id="course-section" class="flex-1 flex flex-col">
+      <h1 id="course-title" class="text-2xl font-bold text-gray-800"></h1>
+      <p id="course-description" class="mt-2 text-gray-700"></p>
+
+      <h2 class="text-lg font-bold text-gray-800 mt-6">📍 Roadmap</h2>
+      <ul id="course-roadmap" class="list-disc pl-5 text-gray-700 mt-2"></ul>
+
+      <h2 class="text-lg font-bold text-gray-800 mt-6">💡 Project Ideas</h2>
+      <ul id="course-projects" class="list-disc pl-5 text-gray-700 mt-2"></ul>
+
+      <button
+        id="download-btn"
+        class="mt-4 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+      >
+        ⬇ Download Roadmap & Projects
+      </button>
+
+      <!-- Chatbot -->
+      <h2 class="text-lg font-bold text-gray-800 mt-6">💬 Ask the Course Bot</h2>
+      <div
+        class="bg-gray-50 p-4 rounded shadow mt-4 flex flex-col"
+        style="height: 350px;"
+      >
+        <div
+          id="chat-box"
+          class="flex-1 overflow-y-auto p-2 flex flex-col space-y-2"
+        ></div>
+        <div class="flex mt-2">
+          <input
+            id="user-input"
+            class="flex-1 border rounded p-2"
+            placeholder="Ask something about this course..."
+          />
+          <button
+            id="send-btn"
+            class="bg-blue-600 text-white px-4 py-2 rounded ml-2"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- Quiz Sidebar -->
+<div id="quiz-sidebar" aria-label="Quiz Sidebar">
+  <h2 class="text-xl font-bold mb-4">📝 Quiz</h2>
+  <div id="quiz-container"></div>
+  <button id="quiz-submit-btn" class="quiz-submit-btn w-full mt-2">
+    Submit Quiz
+  </button>
+  <div id="quiz-result" class="quiz-result"></div>
+</div>
+
+<button id="quiz-toggle-btn" title="Toggle Quiz Sidebar">Quiz</button>
+
+<script>
+  // Show email
+  document.getElementById("user-email").textContent =
+    localStorage.getItem("userEmail") || "Guest";
+
+  // Course Data with quizzes
+  const courseData = {
+    "data-science": {
+      title: "Data Science",
+      description:
+        "Extract insights from data using statistical and computational methods.",
+      roadmap: [
+        "Learn Python & R basics",
+        "Master Statistics",
+        "Data Wrangling",
+        "Machine Learning",
+        "Visualization Tools",
+      ],
+      projects: [
+        "Customer Churn Prediction",
+        "Stock Price Forecasting",
+        "Movie Recommendation System",
+      ],
+      quiz: [
+        { question: "Which language is popular for Data Science?", options: ["Python", "HTML", "CSS", "SQL"], answer: 0 },
+        { question: "What does 'ML' stand for?", options: ["Machine Learning", "Major League", "Multi Logic", "Macro Language"], answer: 0 },
+        { question: "Which is a visualization library?", options: ["Matplotlib", "Django", "Flask", "NumPy"], answer: 0 },
+        { question: "What is 'Data Wrangling'?", options: ["Cleaning and organizing data", "Writing code", "Running models", "Building websites"], answer: 0 },
+        { question: "Which library is used for statistical analysis?", options: ["Pandas", "Matplotlib", "Seaborn", "SciPy"], answer: 3 },
+        { question: "What is supervised learning?", options: ["Learning with labeled data", "Learning without labels", "Learning by watching videos", "None of the above"], answer: 0 },
+        { question: "Which of these is NOT a data type?", options: ["Integer", "Boolean", "Circle", "Float"], answer: 2 },
+        { question: "What is overfitting?", options: ["Model performs well on training data but poorly on new data", "Model works perfectly", "Model is too simple", "Model uses too much data"], answer: 0 },
+        { question: "Which tool is used for big data processing?", options: ["Hadoop", "Excel", "PowerPoint", "Word"], answer: 0 },
+        { question: "What does 'EDA' stand for?", options: ["Exploratory Data Analysis", "Estimated Data Access", "Exact Data Algorithm", "External Data API"], answer: 0 },
+      ],
+    },
+    "machine-learning": {
+      title: "Machine Learning",
+      description: "Build algorithms that learn from data.",
+      roadmap: [
+        "Python for ML",
+        "Regression Models",
+        "Decision Trees",
+        "Neural Networks",
+        "Deploy ML Models",
+      ],
+      projects: [
+        "Spam Email Classifier",
+        "Handwriting Recognition",
+        "House Price Prediction",
+      ],
+      quiz: [
+        { question: "What is supervised learning?", options: ["Learning with labeled data", "Learning without labels", "Training a dog", "None of the above"], answer: 0 },
+        { question: "Which algorithm is used for classification?", options: ["SVM", "KNN", "Linear Regression", "Random Forest"], answer: 0 },
+        { question: "What is overfitting?", options: ["Model performs well on training data but poorly on test data", "Model generalizes well", "Model is undertrained", "Model has too few features"], answer: 0 },
+        { question: "Which is NOT a type of ML?", options: ["Supervised", "Unsupervised", "Reinforcement", "Regression"], answer: 3 },
+        { question: "Neural networks are inspired by?", options: ["Human brain", "Animals", "Plants", "Computers"], answer: 0 },
+        { question: "Which library is popular for ML in Python?", options: ["TensorFlow", "Flask", "Django", "React"], answer: 0 },
+        { question: "What does 'K' stand for in KNN?", options: ["Number of nearest neighbors", "Kernel", "Kind", "Knowledge"], answer: 0 },
+        { question: "What is unsupervised learning?", options: ["Learning patterns without labels", "Learning with labels", "Learning online", "None of the above"], answer: 0 },
+        { question: "Which method reduces dimensionality?", options: ["PCA", "SVM", "KNN", "Random Forest"], answer: 0 },
+        { question: "What is a confusion matrix?", options: ["Table to evaluate classification models", "Neural network layer", "Data cleaning method", "Model training technique"], answer: 0 },
+      ],
+    },
+    "computer-science": {
+  title: "Computer Science Engineering",
+  description: "Design, develop, and optimize computer software and hardware systems.",
+  roadmap: [
+    "Programming Fundamentals",
+    "Data Structures & Algorithms",
+    "Operating Systems",
+    "Database Management",
+    "Computer Networks",
+    "Software Engineering",
+    "Artificial Intelligence",
+    "Cloud Computing",
+    "Cybersecurity",
+    "Capstone Project"
+  ],
+  projects: [
+    "Build a Chat Application",
+    "Design a Database System",
+    "Create a Simple Operating System",
+    "Develop a Machine Learning Model"
+  ],
+  quiz: [
+    { q: "What is the time complexity of binary search?", options: ["O(n)", "O(log n)", "O(n^2)", "O(1)"], answer: 1 },
+    { q: "Which data structure uses FIFO?", options: ["Stack", "Queue", "Tree", "Graph"], answer: 1 },
+    { q: "What does OS stand for?", options: ["Open Source", "Operating System", "Output Stream", "Offline System"], answer: 1 },
+    { q: "Which language is primarily used for Android development?", options: ["Java", "Python", "C#", "Ruby"], answer: 0 },
+    { q: "What is a primary key in databases?", options: ["Unique identifier", "Foreign key", "Index", "Table name"], answer: 0 },
+    { q: "Which protocol is used to send emails?", options: ["FTP", "SMTP", "HTTP", "TCP"], answer: 1 },
+    { q: "Which is NOT a programming paradigm?", options: ["Procedural", "Object-Oriented", "Functional", "Mechanical"], answer: 3 },
+    { q: "What is a deadlock?", options: ["Process waiting indefinitely", "Successful process completion", "Data loss", "System reboot"], answer: 0 },
+    { q: "Which of these is a NoSQL database?", options: ["MongoDB", "MySQL", "Oracle", "PostgreSQL"], answer: 0 },
+    { q: "Which company developed the Linux OS?", options: ["Microsoft", "Apple", "Linus Torvalds", "IBM"], answer: 2 }
+  ]
+},
+
+"mechanical": {
+  title: "Mechanical Engineering",
+  description: "Design, analyze, and manufacture mechanical systems.",
+  roadmap: [
+    "Engineering Mechanics",
+    "Thermodynamics",
+    "Material Science",
+    "Fluid Mechanics",
+    "Heat Transfer",
+    "Manufacturing Processes",
+    "CAD and CAM",
+    "Machine Design",
+    "Control Systems",
+    "Final Year Project"
+  ],
+  projects: [
+    "Design a Gearbox",
+    "Build a Heat Exchanger",
+    "Develop a Pneumatic System",
+    "3D Modeling with CAD Software"
+  ],
+  quiz: [
+    { q: "What is the unit of force?", options: ["Newton", "Pascal", "Joule", "Watt"], answer: 0 },
+    { q: "What does CAD stand for?", options: ["Computer-Aided Design", "Computer Algorithm Development", "Control and Automation Device", "Centralized Application Database"], answer: 0 },
+    { q: "Which law relates force, mass, and acceleration?", options: ["Newton's Second Law", "Newton's First Law", "Ohm's Law", "Bernoulli's Principle"], answer: 0 },
+    { q: "What is thermodynamics study?", options: ["Heat and Energy", "Fluid Flow", "Material Strength", "Electric Circuits"], answer: 0 },
+    { q: "Which is a manufacturing process?", options: ["Casting", "Welding", "Forging", "All of the above"], answer: 3 },
+    { q: "What is the property of a material to resist deformation?", options: ["Strength", "Ductility", "Hardness", "Elasticity"], answer: 0 },
+    { q: "What device measures temperature?", options: ["Thermometer", "Manometer", "Barometer", "Voltmeter"], answer: 0 },
+    { q: "What is fluid mechanics study?", options: ["Behavior of fluids", "Solid mechanics", "Thermal conductivity", "Material fatigue"], answer: 0 },
+    { q: "Which software is used for 3D modeling?", options: ["AutoCAD", "MATLAB", "Excel", "Word"], answer: 0 },
+    { q: "What does CAM stand for?", options: ["Computer-Aided Manufacturing", "Control and Monitoring", "Centralized Automation Model", "Continuous Assessment Method"], answer: 0 }
+  ]
+},
+
+"electrical": {
+  title: "Electrical Engineering",
+  description: "Study and apply electricity, electronics, and electromagnetism.",
+  roadmap: [
+    "Circuit Theory",
+    "Electromagnetics",
+    "Digital Electronics",
+    "Control Systems",
+    "Power Systems",
+    "Electrical Machines",
+    "Signal Processing",
+    "Microcontrollers",
+    "Renewable Energy",
+    "Final Project"
+  ],
+  projects: [
+    "Design a Power Supply",
+    "Build a Digital Clock",
+    "Signal Amplifier Circuit",
+    "Renewable Energy Model"
+  ],
+  quiz: [
+    { q: "What is Ohm's Law?", options: ["V=IR", "P=IV", "E=mc^2", "F=ma"], answer: 0 },
+    { q: "Unit of electric current?", options: ["Ampere", "Volt", "Ohm", "Watt"], answer: 0 },
+    { q: "Which device converts AC to DC?", options: ["Rectifier", "Transformer", "Generator", "Inverter"], answer: 0 },
+    { q: "What is a transistor used for?", options: ["Amplification", "Power supply", "Resistance", "Energy storage"], answer: 0 },
+    { q: "Which signal has discrete values?", options: ["Digital", "Analog", "AC", "DC"], answer: 0 },
+    { q: "What is frequency unit?", options: ["Hertz", "Volt", "Ohm", "Watt"], answer: 0 },
+    { q: "What does LED stand for?", options: ["Light Emitting Diode", "Light Energy Device", "Laser Emission Device", "Low Energy Diode"], answer: 0 },
+    { q: "What is a capacitor?", options: ["Stores electric charge", "Resists current", "Generates voltage", "Amplifies signal"], answer: 0 },
+    { q: "Transformer is used to?", options: ["Step up or step down voltage", "Convert AC to DC", "Store energy", "Generate current"], answer: 0 },
+    { q: "Which is renewable energy?", options: ["Solar", "Coal", "Natural Gas", "Oil"], answer: 0 }
+  ]
+},
+
+"civil": {
+  title: "Civil Engineering",
+  description: "Design and build infrastructure like roads, bridges, and buildings.",
+  roadmap: [
+    "Engineering Mechanics",
+    "Surveying",
+    "Building Materials",
+    "Structural Analysis",
+    "Concrete Technology",
+    "Soil Mechanics",
+    "Transportation Engineering",
+    "Water Resources",
+    "Environmental Engineering",
+    "Project Management"
+  ],
+  projects: [
+    "Bridge Design",
+    "Road Construction Plan",
+    "Water Treatment Plant Model",
+    "Structural Analysis of a Building"
+  ],
+  quiz: [
+    { q: "What is concrete made of?", options: ["Cement, sand, aggregate, water", "Steel and wood", "Clay and water", "Plastic and cement"], answer: 0 },
+    { q: "Unit of stress?", options: ["Pascal", "Newton", "Watt", "Volt"], answer: 0 },
+    { q: "What is surveying?", options: ["Measuring land", "Building roads", "Mixing concrete", "Designing machines"], answer: 0 },
+    { q: "What is soil mechanics study?", options: ["Soil properties", "Water flow", "Air pollution", "Electrical circuits"], answer: 0 },
+    { q: "Which is a renewable construction material?", options: ["Bamboo", "Steel", "Concrete", "Glass"], answer: 0 },
+    { q: "What does CAD stand for in civil?", options: ["Computer-Aided Design", "Civil Architecture Design", "Construction and Development", "Certified Architect Design"], answer: 0 },
+    { q: "What is a beam used for?", options: ["Support loads", "Store water", "Generate power", "Transmit signals"], answer: 0 },
+    { q: "Which is a water resource?", options: ["Reservoir", "Solar panel", "Wind turbine", "Transformer"], answer: 0 },
+    { q: "What is a foundation?", options: ["Base of a structure", "Roof of a building", "Wall material", "Floor covering"], answer: 0 },
+    { q: "What is sustainability?", options: ["Meeting present needs without compromising future", "Building tall buildings", "Using concrete", "Constructing roads"], answer: 0 }
+  ]
+},
+
+"ece": {
+  title: "Electronics and Communication Engineering",
+  description: "Study electronic devices, circuits, and communication systems.",
+  roadmap: [
+    "Electronic Devices",
+    "Analog Circuits",
+    "Digital Circuits",
+    "Signals and Systems",
+    "Communication Systems",
+    "Microprocessors",
+    "VLSI Design",
+    "Embedded Systems",
+    "Wireless Networks",
+    "Project Work"
+  ],
+  projects: [
+    "Build an Amplifier",
+    "Design a Digital Clock",
+    "Wireless Communication Model",
+    "Microcontroller Based Project"
+  ],
+  quiz: [
+    { q: "What is an analog signal?", options: ["Continuous signal", "Discrete signal", "Digital signal", "Binary signal"], answer: 0 },
+    { q: "What does VLSI stand for?", options: ["Very Large Scale Integration", "Variable Logic Signal Input", "Voltage Level Signal Interference", "Virtual Logic System Interface"], answer: 0 },
+    { q: "What is a microprocessor?", options: ["CPU on a chip", "Memory chip", "Input device", "Output device"], answer: 0 },
+    { q: "What is modulation?", options: ["Varying signal for transmission", "Amplifying a signal", "Filtering noise", "Storing data"], answer: 0 },
+    { q: "What is the frequency range of visible light?", options: ["~4x10^14 to 8x10^14 Hz", "~10^3 to 10^6 Hz", "~10^9 to 10^12 Hz", "~10^18 to 10^21 Hz"], answer: 0 },
+    { q: "What is the primary use of a diode?", options: ["Allow current in one direction", "Store energy", "Amplify signals", "Convert AC to DC"], answer: 0 },
+    { q: "Which is a semiconductor material?", options: ["Silicon", "Copper", "Iron", "Aluminum"], answer: 0 },
+    { q: "What is an embedded system?", options: ["Computer system within a device", "External hard drive", "Mobile phone", "Cloud server"], answer: 0 },
+    { q: "Which communication is wireless?", options: ["WiFi", "Ethernet", "Fiber Optic", "Coaxial Cable"], answer: 0 },
+    { q: "What is a logic gate?", options: ["Basic digital circuit", "Power supply", "Display device", "Memory unit"], answer: 0 }
+  ]
+},
+
+"chemical": {
+  title: "Chemical Engineering",
+  description: "Apply chemistry, physics, and math to process materials.",
+  roadmap: [
+    "Chemical Thermodynamics",
+    "Process Calculations",
+    "Fluid Mechanics",
+    "Heat Transfer",
+    "Mass Transfer",
+    "Reaction Engineering",
+    "Process Control",
+    "Plant Design",
+    "Safety Engineering",
+    "Project Work"
+  ],
+  projects: [
+    "Design a Distillation Column",
+    "Chemical Reactor Design",
+    "Wastewater Treatment Model",
+    "Process Simulation"
+  ],
+  quiz: [
+    { q: "What is the unit of pressure?", options: ["Pascal", "Newton", "Joule", "Watt"], answer: 0 },
+    { q: "What does a reactor do?", options: ["Carry out chemical reactions", "Heat materials", "Cool fluids", "Mix gases"], answer: 0 },
+    { q: "What is mass transfer?", options: ["Movement of mass from one place to another", "Energy transfer", "Heat flow", "Chemical reaction"], answer: 0 },
+    { q: "What is thermodynamics study?", options: ["Heat and energy", "Chemical reactions", "Fluid flow", "Material strength"], answer: 0 },
+    { q: "What is safety engineering?", options: ["Prevent accidents", "Build structures", "Design electronics", "Write software"], answer: 0 },
+    { q: "What is distillation?", options: ["Separation by boiling points", "Mixing liquids", "Heating solids", "Compressing gases"], answer: 0 },
+    { q: "What does a heat exchanger do?", options: ["Transfer heat between fluids", "Store heat", "Generate heat", "Absorb chemicals"], answer: 0 },
+    { q: "What is a catalyst?", options: ["Speeds up reaction", "Slows reaction", "Stops reaction", "Starts reaction"], answer: 0 },
+    { q: "Which is a chemical unit?", options: ["Mole", "Newton", "Watt", "Joule"], answer: 0 },
+    { q: "What is process control?", options: ["Regulate chemical processes", "Design software", "Manage projects", "Develop marketing plans"], answer: 0 }
+  ]
+},
+
+"information-technology": {
+  title: "Information Technology",
+  description: "Focus on computing technology and information systems.",
+  roadmap: [
+    "Programming Basics",
+    "Web Development",
+    "Database Management",
+    "Networking",
+    "Cybersecurity",
+    "Cloud Computing",
+    "Mobile App Development",
+    "Big Data",
+    "DevOps",
+    "Capstone Project"
+  ],
+  projects: [
+    "Build a Responsive Website",
+    "Design a Network Infrastructure",
+    "Implement Cybersecurity Measures",
+    "Create a Mobile App"
+  ],
+  quiz: [
+    { q: "What does HTTP stand for?", options: ["Hypertext Transfer Protocol", "Hyperlink Text Protocol", "Hyper Transfer Text Program", "High Transfer Protocol"], answer: 0 },
+    { q: "Which is a backend language?", options: ["PHP", "HTML", "CSS", "JavaScript"], answer: 0 },
+    { q: "What does SQL do?", options: ["Manage databases", "Style web pages", "Create graphics", "Develop apps"], answer: 0 },
+    { q: "What is cybersecurity?", options: ["Protecting systems from attacks", "Creating software", "Designing hardware", "Managing projects"], answer: 0 },
+    { q: "What is cloud computing?", options: ["Using remote servers", "Storing data locally", "Programming in C", "Building hardware"], answer: 0 },
+    { q: "What does API stand for?", options: ["Application Programming Interface", "Automated Program Integration", "Applied Programming Instruction", "Advanced Process Internet"], answer: 0 },
+    { q: "Which is a markup language?", options: ["HTML", "Python", "Java", "SQL"], answer: 0 },
+    { q: "What is DevOps?", options: ["Development and Operations", "Device Operation", "Digital Optimization", "Data Over Storage"], answer: 0 },
+    { q: "Which is a mobile OS?", options: ["Android", "Windows", "Linux", "MacOS"], answer: 0 },
+    { q: "What is Big Data?", options: ["Large datasets", "Small databases", "Programming method", "Cloud service"], answer: 0 }
+  ]
+},
+
+"aerospace": {
+  title: "Aerospace Engineering",
+  description: "Design and build aircraft and spacecraft.",
+  roadmap: [
+    "Aerodynamics",
+    "Flight Mechanics",
+    "Propulsion Systems",
+    "Structural Analysis",
+    "Materials Science",
+    "Control Systems",
+    "Spacecraft Design",
+    "Avionics",
+    "Thermal Systems",
+    "Final Year Project"
+  ],
+  projects: [
+    "Design a UAV",
+    "Build a Rocket Model",
+    "Simulate Flight Dynamics",
+    "Develop Satellite Components"
+  ],
+  quiz: [
+    { q: "What is aerodynamics?", options: ["Study of air flow", "Study of engines", "Study of electronics", "Study of materials"], answer: 0 },
+    { q: "What does UAV stand for?", options: ["Unmanned Aerial Vehicle", "Universal Aviation Vehicle", "Unique Air Vehicle", "Underwater Autonomous Vehicle"], answer: 0 },
+    { q: "What is thrust?", options: ["Force to move aircraft forward", "Drag force", "Lift force", "Weight"], answer: 0 },
+    { q: "Which gas is used in jet engines?", options: ["Air", "Hydrogen", "Oxygen", "Nitrogen"], answer: 0 },
+    { q: "What is avionics?", options: ["Aircraft electronics", "Flight mechanics", "Structural design", "Propulsion"], answer: 0 },
+    { q: "What is lift?", options: ["Upward aerodynamic force", "Downward force", "Forward force", "Backward force"], answer: 0 },
+    { q: "Which is a spacecraft?", options: ["Satellite", "Car", "Boat", "Helicopter"], answer: 0 },
+    { q: "What is Mach number?", options: ["Speed relative to sound", "Speed relative to light", "Speed of light", "Speed relative to wind"], answer: 0 },
+    { q: "Which material is commonly used in aerospace?", options: ["Aluminum", "Plastic", "Wood", "Glass"], answer: 0 },
+    { q: "What is the function of a rudder?", options: ["Control yaw", "Control pitch", "Control roll", "Control speed"], answer: 0 }
+  ]
+},
+
+"biomedical": {
+  title: "Biomedical Engineering",
+  description: "Combine engineering principles with medical sciences.",
+  roadmap: [
+    "Human Anatomy & Physiology",
+    "Biomaterials",
+    "Medical Imaging",
+    "Biomechanics",
+    "Medical Devices",
+    "Bioinstrumentation",
+    "Tissue Engineering",
+    "Rehabilitation Engineering",
+    "Healthcare IT",
+    "Capstone Project"
+  ],
+  projects: [
+    "Design a Prosthetic Limb",
+    "Develop a Heart Monitor",
+    "Build a Medical Imaging System",
+    "Create Rehabilitation Equipment"
+  ],
+  quiz: [
+    { q: "What is biomaterials study?", options: ["Materials compatible with the human body", "Metal properties", "Electrical circuits", "Chemical reactions"], answer: 0 },
+    { q: "What does MRI stand for?", options: ["Magnetic Resonance Imaging", "Medical Radiology Imaging", "Multiple Resonance Imaging", "Magnetic Radiation Imaging"], answer: 0 },
+    { q: "What is biomechanics?", options: ["Mechanics of biological systems", "Study of bones", "Medical devices", "Pharmacology"], answer: 0 },
+    { q: "What is a prosthetic limb?", options: ["Artificial limb", "Injured limb", "Body organ", "Medical device"], answer: 0 },
+    { q: "What is tissue engineering?", options: ["Creating biological tissues", "Surgical procedure", "Medical imaging", "Drug design"], answer: 0 },
+    { q: "Which device monitors heart activity?", options: ["ECG", "X-ray", "Ultrasound", "MRI"], answer: 0 },
+    { q: "What is bioinstrumentation?", options: ["Devices for medical measurements", "Surgical instruments", "Pharmaceuticals", "Biological tissues"], answer: 0 },
+    { q: "What does CT scan stand for?", options: ["Computed Tomography", "Centralized Technology", "Clinical Test", "Computerized Test"], answer: 0 },
+    { q: "Which is a healthcare IT system?", options: ["Electronic Health Records", "Gaming software", "Social media", "Spreadsheet"], answer: 0 },
+    { q: "What is rehabilitation engineering?", options: ["Assistive technologies for disabled", "Sports engineering", "Medical imaging", "Pharmaceuticals"], answer: 0 }
+  ]
+},
+"bba": {
+    title: "BBA",
+    description: "Bachelor of Business Administration focusing on management principles.",
+    roadmap: ["Business Basics", "Marketing Management", "Financial Accounting", "Human Resource Management", "Entrepreneurship"],
+    projects: ["Marketing Plan", "Business Simulation", "HR Case Study"],
+    quiz: [
+      { q: "What is management?", options: ["Process of achieving goals", "Writing code", "Designing buildings", "Cooking"], answer: 0 },
+      { q: "What does HRM stand for?", options: ["Human Resource Management", "High Revenue Marketing", "Human Relations Model", "Hiring and Recruitment"], answer: 0 },
+      { q: "What is SWOT analysis used for?", options: ["Strategic planning", "Financial reporting", "Sales forecasting", "Programming"], answer: 0 },
+      { q: "What is a business plan?", options: ["Document describing business goals", "List of employees", "Tax form", "Code repository"], answer: 0 },
+      { q: "Which is a marketing element?", options: ["Promotion", "Programming", "Architecture", "Manufacturing"], answer: 0 },
+      { q: "What is leadership?", options: ["Influencing others", "Making coffee", "Driving cars", "Cleaning"], answer: 0 },
+      { q: "What is an entrepreneur?", options: ["Someone who starts a business", "Employee", "Investor", "Teacher"], answer: 0 },
+      { q: "What is budgeting?", options: ["Planning expenses", "Coding software", "Building houses", "Selling goods"], answer: 0 },
+      { q: "What is customer satisfaction?", options: ["Meeting customer expectations", "Building products", "Hiring employees", "Making sales"], answer: 0 },
+      { q: "What does ROI mean?", options: ["Return on Investment", "Rate of Interest", "Revenue on Internet", "Ratio of Income"], answer: 0 }
+    ]
+  },
+  "engineering-cse": {
+    title: "Engineering (CSE)",
+    description: "Computer Science & Engineering degree covering software and hardware concepts.",
+    roadmap: ["Programming Fundamentals", "Data Structures & Algorithms", "Operating Systems", "Databases", "Software Engineering"],
+    projects: ["Chat Application", "File System", "Online Library Management"],
+    quiz: [
+      { q: "What does CPU stand for?", options: ["Central Processing Unit", "Computer Personal Unit", "Central Power Unit", "Computer Processing Unit"], answer: 0 },
+      { q: "What is an algorithm?", options: ["Step-by-step solution", "Programming language", "Computer virus", "Data storage"], answer: 0 },
+      { q: "What is OOP?", options: ["Object-Oriented Programming", "Open Operating Procedure", "Original Output Program", "Operational Overhead Process"], answer: 0 },
+      { q: "Which data structure uses FIFO?", options: ["Queue", "Stack", "Tree", "Graph"], answer: 0 },
+      { q: "What is a database?", options: ["Organized data storage", "Programming tool", "Operating system", "Network device"], answer: 0 },
+      { q: "Which is a programming language?", options: ["Python", "Linux", "MySQL", "HTTP"], answer: 0 },
+      { q: "What does HTTP stand for?", options: ["HyperText Transfer Protocol", "High Transfer Text Protocol", "Hyperlink Text Transfer Program", "Hyper Transfer Tool Process"], answer: 0 },
+      { q: "What is recursion?", options: ["Function calling itself", "Looping", "Conditional", "Variable"], answer: 0 },
+      { q: "What is a compiler?", options: ["Converts code to machine language", "Programming tool", "Network protocol", "Hardware device"], answer: 0 },
+      { q: "What is a stack used for?", options: ["Last In First Out data structure", "First In First Out data structure", "Sorting data", "Searching data"], answer: 0 }
+    ]
+  },
+  "psychology": {
+    title: "Psychology",
+    description: "Study of mind and behavior.",
+    roadmap: ["Introduction to Psychology", "Developmental Psychology", "Cognitive Psychology", "Behavioral Psychology", "Psychological Disorders"],
+    projects: ["Behavioral Study", "Memory Experiment", "Stress Analysis"],
+    quiz: [
+      { q: "Who is known as the father of psychology?", options: ["Wilhelm Wundt", "Sigmund Freud", "Carl Jung", "Ivan Pavlov"], answer: 0 },
+      { q: "What does ‘cognition’ refer to?", options: ["Mental processes", "Physical health", "Emotional state", "Social behavior"], answer: 0 },
+      { q: "What is classical conditioning?", options: ["Learning by association", "Learning by reward", "Imitation", "Insight learning"], answer: 0 },
+      { q: "Which part of brain controls emotions?", options: ["Amygdala", "Cerebellum", "Frontal lobe", "Medulla"], answer: 0 },
+      { q: "What is neuroplasticity?", options: ["Brain’s ability to change", "Memory loss", "Brain injury", "Psychological disorder"], answer: 0 },
+      { q: "Who developed psychoanalysis?", options: ["Sigmund Freud", "B.F. Skinner", "Jean Piaget", "Carl Rogers"], answer: 0 },
+      { q: "What is the study of behavior called?", options: ["Behaviorism", "Cognition", "Emotion", "Sensation"], answer: 0 },
+      { q: "What is an IQ test?", options: ["Intelligence test", "Emotional test", "Memory test", "Personality test"], answer: 0 },
+      { q: "Which psychologist is famous for hierarchy of needs?", options: ["Abraham Maslow", "Carl Jung", "Sigmund Freud", "Ivan Pavlov"], answer: 0 },
+      { q: "What is motivation?", options: ["Process that initiates behavior", "Learning style", "Memory capacity", "Emotional state"], answer: 0 }
+    ]
+  },
+   "mcom": {
+    title: "M.Com",
+    description: "Advanced studies in commerce, finance, and accounting.",
+    roadmap: ["Advanced Accounting", "Taxation & Auditing", "Financial Management", "Business Laws", "Research Methods"],
+    projects: ["Financial Reporting", "Tax Planning", "Audit Report"],
+    quiz: [
+      { q: "What is the purpose of auditing?", options: ["Verify financial statements", "Sell products", "Manage employees", "Write contracts"], answer: 0 },
+      { q: "What is working capital?", options: ["Current assets minus current liabilities", "Total revenue", "Long term debt", "Profit"], answer: 0 },
+      { q: "What is GST?", options: ["Goods and Services Tax", "General Sales Tax", "Global Service Trade", "Government Service Tax"], answer: 0 },
+      { q: "What is a balance sheet?", options: ["Financial position at a point in time", "Income over a period", "Cash flow report", "Tax document"], answer: 0 },
+      { q: "What does ROI mean?", options: ["Return on Investment", "Rate of Interest", "Revenue on Income", "Return on Income"], answer: 0 },
+      { q: "What is deferred revenue?", options: ["Revenue received but not earned", "Revenue earned but not received", "Profit", "Expense"], answer: 0 },
+      { q: "Which law deals with contracts?", options: ["Contract Law", "Criminal Law", "Property Law", "Labour Law"], answer: 0 },
+      { q: "What is depreciation?", options: ["Allocation of asset cost", "Increase in asset value", "Profit", "Tax"], answer: 0 },
+      { q: "What is a ledger?", options: ["Book of accounts", "Tax document", "Financial statement", "Bank document"], answer: 0 },
+      { q: "Which tax is indirect?", options: ["GST", "Income Tax", "Wealth Tax", "Capital Gains Tax"], answer: 0 }
+    ]
+  },
+   "mba": {
+    title: "MBA",
+    description: "Master of Business Administration.",
+    roadmap: ["Strategic Management", "Finance & Marketing", "Operations", "Leadership", "Capstone"],
+    projects: ["Expansion Plan", "Brand Strategy", "Financial Forecast"],
+    quiz: [
+      { q: "What is SWOT analysis?", options: ["Strengths, Weaknesses, Opportunities, Threats", "Sales, Work, Organization, Time", "Strategy, Wealth, Operations, Targets", "System, Work, Offerings, Training"], answer: 0 },
+      { q: "What does ROI mean?", options: ["Return on Investment", "Rate of Interest", "Revenue on Income", "Return of Inventory"], answer: 0 },
+      { q: "Which is a marketing strategy?", options: ["Segmentation", "Manufacturing", "Accounting", "Auditing"], answer: 0 },
+      { q: "What is break-even point?", options: ["Costs = Revenues", "Profits > Losses", "Total Sales", "Net Income"], answer: 0 },
+      { q: "What is leadership?", options: ["Influencing people", "Managing money", "Selling products", "Preparing reports"], answer: 0 },
+      { q: "Which financial statement shows company’s assets?", options: ["Balance Sheet", "Income Statement", "Cash Flow Statement", "Equity Statement"], answer: 0 },
+      { q: "What is benchmarking?", options: ["Comparing with best practices", "Setting goals", "Hiring staff", "Advertising"], answer: 0 },
+      { q: "What does CRM stand for?", options: ["Customer Relationship Management", "Corporate Risk Management", "Cash Revenue Management", "Customer Retention Model"], answer: 0 },
+      { q: "What is a business model?", options: ["Plan to make money", "Legal document", "Employee contract", "Marketing plan"], answer: 0 },
+      { q: "What is corporate governance?", options: ["Rules for management", "Marketing strategy", "Financial auditing", "Customer service"], answer: 0 }
+    ]
+  },
+    "bcom": {
+      title: "B.Com",
+      description: "Commerce, finance, and business.",
+      roadmap: [
+        "Accounting",
+        "Business Law",
+        "Finance",
+        "Taxation",
+        "Business Analytics",
+      ],
+      projects: ["Financial Plan", "Tax Filing", "Stock Analysis"],
+      quiz: [
+        { question: "What does B.Com stand for?", options: ["Bachelor of Commerce", "Bachelor of Communication", "Bachelor of Community", "Bachelor of Computing"], answer: 0 },
+        { question: "Which is a financial statement?", options: ["Balance Sheet", "Operating System", "Web Browser", "Spreadsheet"], answer: 0 },
+        { question: "What is GST?", options: ["Goods and Services Tax", "General Sales Transaction", "Global Service Team", "Government Standard Tax"], answer: 0 },
+        { question: "What is the accounting equation?", options: ["Assets = Liabilities + Equity", "Revenue = Cost + Profit", "Sales = Income - Expenses", "Assets = Income + Expense"], answer: 0 },
+        { question: "Which law governs contracts?", options: ["Contract Law", "Criminal Law", "International Law", "Property Law"], answer: 0 },
+        { question: "What does ROI stand for?", options: ["Return on Investment", "Rate of Interest", "Ratio of Income", "Record of Inventory"], answer: 0 },
+        { question: "Which tax is deducted at source?", options: ["TDS", "GST", "VAT", "CST"], answer: 0 },
+        { question: "What is working capital?", options: ["Current Assets - Current Liabilities", "Total Assets - Total Liabilities", "Cash in hand", "Fixed Assets"], answer: 0 },
+        { question: "Who regulates the stock market?", options: ["SEBI", "RBI", "IRDA", "FSSAI"], answer: 0 },
+        { question: "What is double entry bookkeeping?", options: ["Each transaction recorded twice", "Single accounting record", "Tax filing process", "Audit method"], answer: 0 },
+      ],
+    },
+    "bsc": {
+      title: "B.Sc",
+      description: "Science-focused degree.",
+      roadmap: [
+        "Core Science",
+        "Lab Skills",
+        "Specialization",
+        "Research Methods",
+        "Final Project",
+      ],
+      projects: ["Physics Simulation", "Chemical Analysis", "Biological Study"],
+      quiz: [
+        { question: "What is the chemical symbol for water?", options: ["H2O", "O2", "CO2", "NaCl"], answer: 0 },
+        { question: "Who developed the theory of relativity?", options: ["Einstein", "Newton", "Tesla", "Curie"], answer: 0 },
+        { question: "What is the center of an atom called?", options: ["Nucleus", "Electron", "Proton", "Neutron"], answer: 0 },
+        { question: "What is photosynthesis?", options: ["Process by which plants make food", "Process of breathing", "Animal digestion", "Rock formation"], answer: 0 },
+        { question: "Which gas do plants release?", options: ["Oxygen", "Carbon dioxide", "Nitrogen", "Hydrogen"], answer: 0 },
+        { question: "What is the unit of electric current?", options: ["Ampere", "Volt", "Ohm", "Watt"], answer: 0 },
+        { question: "Which planet is known as the Red Planet?", options: ["Mars", "Venus", "Jupiter", "Saturn"], answer: 0 },
+        { question: "What is DNA?", options: ["Deoxyribonucleic acid", "A virus", "Protein", "Cell"], answer: 0 },
+        { question: "What is the boiling point of water?", options: ["100°C", "0°C", "50°C", "212°C"], answer: 0 },
+        { question: "What force keeps us on the ground?", options: ["Gravity", "Magnetism", "Friction", "Electricity"], answer: 0 },
+      ],
+    },
+    "law": {
+      title: "Law",
+      description: "Legal systems and justice.",
+      roadmap: [
+        "Legal Systems",
+        "Constitutional Law",
+        "Criminal Law",
+        "Civil Law",
+        "Legal Research",
+      ],
+      projects: ["Case Study", "Mock Trial", "Legal Aid Camp"],
+      quiz: [
+        { question: "What is the supreme law of the land in India?", options: ["Constitution", "Statute", "Ordinance", "Bylaw"], answer: 0 },
+        { question: "Which body enforces criminal law?", options: ["Police", "Civil Court", "Legislature", "Executive"], answer: 0 },
+        { question: "What is Habeas Corpus?", options: ["Right against unlawful detention", "Right to vote", "Right to property", "Right to privacy"], answer: 0 },
+        { question: "What is a 'tort'?", options: ["Civil wrong", "Criminal offense", "Lawyer", "Court order"], answer: 0 },
+        { question: "Who is the head of judiciary in India?", options: ["Chief Justice", "President", "Prime Minister", "Attorney General"], answer: 0 },
+        { question: "What does IPC stand for?", options: ["Indian Penal Code", "Indian Property Code", "International Penal Code", "Internal Policy Code"], answer: 0 },
+        { question: "Which law governs contracts?", options: ["Contract Law", "Family Law", "Criminal Law", "Environmental Law"], answer: 0 },
+        { question: "What is 'mens rea'?", options: ["Guilty mind", "Physical act", "Evidence", "Lawyer"], answer: 0 },
+        { question: "Which court is highest in India?", options: ["Supreme Court", "High Court", "District Court", "Session Court"], answer: 0 },
+        { question: "What is 'burden of proof'?", options: ["Responsibility to prove facts", "Judgment", "Witness", "Lawyer"], answer: 0 },
+      ],
+    },
+    "full-stack": {
+      title: "Full Stack Development",
+      description: "Develop both frontend and backend.",
+      roadmap: [
+        "HTML, CSS, JS",
+        "Frontend Framework",
+        "Backend Development",
+        "Databases",
+        "Cloud Deployment",
+      ],
+      projects: ["E-Commerce Website", "Portfolio Website", "Blog Platform"],
+      quiz: [
+        { question: "What does HTML stand for?", options: ["HyperText Markup Language", "Hyperlink Text Management Language", "Home Tool Markup Language", "Hyper Trainer Marking Language"], answer: 0 },
+        { question: "Which language is used for styling web pages?", options: ["CSS", "HTML", "JavaScript", "Python"], answer: 0 },
+        { question: "Which JS framework is popular for frontend?", options: ["React", "Django", "Laravel", "Flask"], answer: 0 },
+        { question: "What does API stand for?", options: ["Application Programming Interface", "Application Process Integration", "Applied Programming Interface", "Application Program Internet"], answer: 0 },
+        { question: "Which database is NoSQL?", options: ["MongoDB", "MySQL", "PostgreSQL", "SQLite"], answer: 0 },
+        { question: "What is backend development?", options: ["Server-side logic", "Client-side design", "Networking", "Database design"], answer: 0 },
+        { question: "Which language is used in backend?", options: ["Node.js", "CSS", "HTML", "Photoshop"], answer: 0 },
+        { question: "What is REST?", options: ["Representational State Transfer", "Random State Transfer", "Representational Simple Transfer", "Rapid State Transport"], answer: 0 },
+        { question: "What does CSS stand for?", options: ["Cascading Style Sheets", "Computer Style Sheets", "Creative Style System", "Control Style Sheets"], answer: 0 },
+        { question: "What is responsive design?", options: ["Design that works on all devices", "Design for desktops only", "Design for mobile only", "Design for print"], answer: 0 },
+      ],
+    },
+  };
+
+  // Populate course list
+  const courseList = document.getElementById("course-list");
+  function renderCourseList(filter = "") {
+    courseList.innerHTML = "";
+    Object.keys(courseData).forEach((key) => {
+      if (
+        courseData[key].title.toLowerCase().includes(filter.toLowerCase())
+      ) {
+        const div = document.createElement("div");
+        div.className = "course-item p-2 rounded border";
+        div.textContent = courseData[key].title;
+        div.onclick = () => loadCourse(key);
+        courseList.appendChild(div);
+      }
+    });
+  }
+  renderCourseList();
+
+  // Search filter
+  document
+    .getElementById("search-course")
+    .addEventListener("keyup", function () {
+      renderCourseList(this.value);
+    });
+
+  let selectedCourse = "";
+  function loadCourse(key) {
+    selectedCourse = key;
+    const data = courseData[key];
+    document.getElementById("course-title").textContent = data.title;
+    document.getElementById("course-description").textContent = data.description;
+    document.getElementById("course-roadmap").innerHTML = data.roadmap
+      .map((r) => `<li>${r}</li>`)
+      .join("");
+    document.getElementById("course-projects").innerHTML = data.projects
+      .map((p) => `<li>${p}</li>`)
+      .join("");
+    document.getElementById("course-section").style.display = "block";
+
+    loadQuiz(data.quiz || []);
+    clearQuizResult();
+
+    // Clear chat
+    document.getElementById("chat-box").innerHTML = "";
+  }
+
+  // Download roadmap and projects as text
+  document
+    .getElementById("download-btn")
+    .addEventListener("click", function () {
+      if (!selectedCourse) return;
+      const data = courseData[selectedCourse];
+      const content = `Course: ${data.title}\n\nRoadmap:\n${data.roadmap.join(
+        "\n"
+      )}\n\nProjects:\n${data.projects.join("\n")}`;
+      const blob = new Blob([content], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${data.title}_Roadmap_Projects.txt`;
+      link.click();
+    });
+
+  // Quiz sidebar toggle
+  const quizSidebar = document.getElementById("quiz-sidebar");
+  const quizToggleBtn = document.getElementById("quiz-toggle-btn");
+  quizToggleBtn.addEventListener("click", () => {
+    quizSidebar.classList.toggle("open");
+  });
+
+  // Load quiz questions into sidebar
+  const quizContainer = document.getElementById("quiz-container");
+  function loadQuiz(quizQuestions) {
+    quizContainer.innerHTML = "";
+    quizQuestions.forEach((q, i) => {
+      const card = document.createElement("div");
+      card.className = "quiz-card";
+      card.innerHTML = `
+        <div class="quiz-question">${i + 1}. ${q.question}</div>
+        <div class="quiz-options">
+          ${q.options
+            .map(
+              (opt, idx) =>
+                `<label><input type="radio" name="q${i}" value="${idx}" /> ${opt}</label>`
+            )
+            .join("")}
+        </div>
+      `;
+      quizContainer.appendChild(card);
+    });
+  }
+
+  // Clear quiz result
+  function clearQuizResult() {
+    document.getElementById("quiz-result").textContent = "";
+  }
+  
+
+  // Submit quiz and show score
+  document
+    .getElementById("quiz-submit-btn")
+    .addEventListener("click", () => {
+      if (!selectedCourse) return;
+      const quizQuestions = courseData[selectedCourse].quiz || [];
+      let score = 0;
+      let total = quizQuestions.length;
+
+      for (let i = 0; i < total; i++) {
+        const selected = document.querySelector(
+          `input[name="q${i}"]:checked`
+        );
+        if (selected && parseInt(selected.value) === quizQuestions[i].answer) {
+          score++;
+        }
+      }
+      const result = document.getElementById("quiz-result");
+      result.textContent = `You scored ${score} out of ${total}`;
+    });
+
+  // Chatbot placeholder: replace with your own API key and code
+  const GEMINI_API_KEY = "AIzaSyDswmnAXka3LCDJ47pkFIkb-M3Tm4ZGUPQ";
+  document.getElementById("send-btn").addEventListener("click", sendMessage);
+
+  async function sendMessage() {
+    const msg = document.getElementById("user-input").value.trim();
+    if (!msg || !selectedCourse) return;
+
+    const chatBox = document.getElementById("chat-box");
+    const userMsg = document.createElement("div");
+    userMsg.className = "chat-message chat-user self-end";
+    userMsg.textContent = msg;
+    chatBox.appendChild(userMsg);
+    document.getElementById("user-input").value = "";
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    try {
+      const fullPrompt = `You are an expert in ${
+        courseData[selectedCourse].title
+      }. Answer clearly:\n${msg}`;
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] }),
+        }
+      );
+      const data = await response.json();
+      const botText =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "Sorry, I couldn't understand.";
+
+      const botMsg = document.createElement("div");
+      botMsg.className = "chat-message chat-bot self-start";
+      botMsg.textContent = botText;
+      chatBox.appendChild(botMsg);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    } catch (err) {
+      const errorMsg = document.createElement("div");
+      errorMsg.className = "chat-message chat-bot self-start text-red-600";
+      errorMsg.textContent = `Error: ${err.message}`;
+      chatBox.appendChild(errorMsg);
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>YuvaPath - Sign In</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body {
+  background: linear-gradient(135deg, #e0f7fa, #f1f8ff);
+}
+</style>
+</head>
+<body class="flex items-center justify-center min-h-screen font-sans">
+
+<div class="bg-white/90 backdrop-blur-lg p-8 rounded-2xl shadow-lg w-96 border border-gray-100">
+  <div class="text-center mb-6">
+    <h1 class="text-3xl font-bold text-blue-600">YuvaPath</h1>
+    <p class="text-gray-500 text-sm mt-1">Your Career Journey Starts Here</p>
+  </div>
+
+  <div class="mb-4">
+    <label class="block text-gray-700 mb-1 font-medium">Email</label>
+    <input id="email" type="email" placeholder="Enter your email" 
+      class="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none transition">
+  </div>
+
+  <div class="mb-6">
+    <label class="block text-gray-700 mb-1 font-medium">Password</label>
+    <input id="password" type="password" placeholder="Enter password" 
+      class="w-full border border-gray-200 p-3 rounded-lg focus:ring-2 focus:ring-blue-300 outline-none transition">
+  </div>
+
+  <button onclick="signIn()" 
+    class="w-full bg-gradient-to-r from-blue-500 to-teal-400 text-white py-3 rounded-lg shadow hover:from-blue-600 hover:to-teal-500 transition-all">
+    Sign In
+  </button>
+
+  <p class="mt-4 text-center text-sm text-gray-500">
+    Don’t have an account? 
+    <a href="#" class="text-blue-600 hover:underline">Sign Up</a>
+  </p>
+</div>
+
+<script>
+function signIn() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+
+  if (!email || !password) {
+    alert("Please enter both email and password.");
+    return;
+  }
+
+  localStorage.setItem("userEmail", email);
+  window.location.href = "dashboard.html";
+}
+</script>
+
+</body>
+</html>
